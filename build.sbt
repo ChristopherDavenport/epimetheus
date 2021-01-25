@@ -22,7 +22,7 @@ lazy val contributors = Seq(
   "ChristopherDavenport" -> "Christopher Davenport"
 )
 
-val prometheusV = "0.8.1"
+val prometheusV = "0.10.0"
 val catsV = "2.1.1"
 val catsEffectV = "2.1.4"
 val shapelessV = "2.3.3"
