@@ -19,7 +19,7 @@ jobs:
     # stage="test" if no stage is specified
     -
       name: test 2.13
-      scala: 2.13.0
+      scala: 2.13.5
       script: sbt ++$TRAVIS_SCALA_VERSION test
     - name: test 2.12
       scala: 2.12.9
