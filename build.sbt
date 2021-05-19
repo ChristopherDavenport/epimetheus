@@ -82,7 +82,7 @@ lazy val contributors = Seq(
 
 val prometheusV = "0.10.0"
 val catsV = "2.6.1"
-val catsEffectV = "3.1.0"
+val catsEffectV = "3.1.1"
 val shapelessV = "2.3.7"
 
 val specs2V = "4.10.6"
