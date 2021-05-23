@@ -1,172 +1,164 @@
 package io.chrisdavenport.epimetheus
 
 import cats.effect._
-import cats.effect.unsafe.implicits.global
-import org.specs2.mutable.Specification
 import shapeless._
 import io.chrisdavenport.epimetheus.implicits._
 import scala.concurrent.duration._
 
-class GuageSpec extends Specification {
+class GaugeSpec extends munit.CatsEffectSuite {
 
-  "Gauge No Labels" should {
-    "Register cleanly in the collector" in {
-      val test = for {
-        cr <- CollectorRegistry.build[IO]
-        gauge <- Gauge.noLabels[IO](cr, Name("boo"), "Boo Gauge")
-      } yield gauge
+  test("Gauge No Labels: Register cleanly in the collector") {
+    val test = for {
+      cr <- CollectorRegistry.build[IO]
+      gauge <- Gauge.noLabels[IO](cr, Name("boo"), "Boo Gauge")
+    } yield gauge
 
-      test.attempt.unsafeRunSync() must beRight
-    }
-
-    "Increase correctly" in {
-      val test = for {
-        cr <- CollectorRegistry.build[IO]
-        gauge <- Gauge.noLabels[IO](cr, Name("boo"), "Boo Gauge")
-        _ <- gauge.inc
-        out <- gauge.get
-      } yield out
-
-      test.unsafeRunSync() must_=== 1D
-    }
-
-    "Decrease correctly" in {
-      val test = for {
-        cr <- CollectorRegistry.build[IO]
-        gauge <- Gauge.noLabels[IO](cr, Name("boo"), "Boo Gauge")
-        _ <- gauge.inc
-        _ <- gauge.dec
-        out <- gauge.get
-      } yield out
-
-      test.unsafeRunSync() must_=== 0D
-    }
-
-    "Set correctly" in {
-      val set = 52D
-      val test = for {
-        cr <- CollectorRegistry.build[IO]
-        gauge <- Gauge.noLabels[IO](cr, Name("boo"), "Boo Gauge")
-        _ <- gauge.set(set)
-        out <- gauge.get
-      } yield out
-
-      test.unsafeRunSync() must_=== set
-    }
+    test.attempt.map(_.isRight).assert
   }
 
-  "Gauge Labelled" should {
-    "Register cleanly in the collector" in {
-      val test = for {
-        cr <- CollectorRegistry.build[IO]
-        gauge <- Gauge.labelled(cr, Name("boo"), "Boo Gauge", Sized(Label("boo")), {s: String => Sized(s)})
-      } yield gauge
+  test("Gauge No Labels: Increase correctly") {
+    val test = for {
+      cr <- CollectorRegistry.build[IO]
+      gauge <- Gauge.noLabels[IO](cr, Name("boo"), "Boo Gauge")
+      _ <- gauge.inc
+      out <- gauge.get
+    } yield out
 
-      test.attempt.unsafeRunSync() must beRight
-    }
-
-    "Increase correctly" in {
-      val test = for {
-        cr <- CollectorRegistry.build[IO]
-        gauge <- Gauge.labelled(cr, Name("boo"), "Boo Gauge", Sized(Label("boo")), {s: String => Sized(s)})
-        _ <- gauge.label("boo").inc
-        out <- gauge.label("boo").get
-      } yield out
-
-      test.unsafeRunSync() must_=== 1D
-    }
-
-    "Decrease correctly" in {
-      val test = for {
-        cr <- CollectorRegistry.build[IO]
-        gauge <- Gauge.labelled(cr, Name("boo"), "Boo Gauge", Sized(Label("boo")), {s: String => Sized(s)})
-        _ <- gauge.label("boo").inc
-        _ <- gauge.label("boo").dec
-        out <- gauge.label("boo").get
-      } yield out
-
-      test.unsafeRunSync() must_=== 0D
-    }
-
-    "Set correctly" in {
-      val set = 52D
-      val test = for {
-        cr <- CollectorRegistry.build[IO]
-        gauge <- Gauge.labelled(cr, Name("boo"), "Boo Gauge", Sized(Label("boo")), {s: String => Sized(s)})
-        _ <- gauge.label("boo").set(set)
-        out <- gauge.label("boo").get
-      } yield out
-
-      test.unsafeRunSync() must_=== set
-    }
+    test.assertEquals(1D)
   }
 
-  "Gauge Convenience" should {
-    "incIn an operation succesfully" in {
-      val test = for {
-        cr <- CollectorRegistry.build[IO]
-        gauge <- Gauge.noLabels[IO](cr, Name("boo"), "Boo Gauge")
-        defer <- Deferred[IO, Unit]
-        fib <- gauge.incIn(defer.get).start
-        _ <- IO.sleep(1.second)
-        current <- gauge.get
-        _ <- defer.complete(())
-        _ <- fib.join
-        after <- gauge.get
-      } yield (current, after)
+  test("Gauge No Labels: Decrease correctly") {
+    val test = for {
+      cr <- CollectorRegistry.build[IO]
+      gauge <- Gauge.noLabels[IO](cr, Name("boo"), "Boo Gauge")
+      _ <- gauge.inc
+      _ <- gauge.dec
+      out <- gauge.get
+    } yield out
 
-      test.unsafeRunSync() must_=== ((1, 0))
-    }
+    test.assertEquals(0D)
+  }
 
-    "incByIn an operation succesfully" in {
-      val test = for {
-        cr <- CollectorRegistry.build[IO]
-        gauge <- Gauge.noLabels[IO](cr, Name("boo"), "Boo Gauge")
-        defer <- Deferred[IO, Unit]
-        fib <- gauge.incByIn(defer.get, 10).start
-        _ <- IO.sleep(1.second)
-        current <- gauge.get
-        _ <- defer.complete(())
-        _ <- fib.join
-        after <- gauge.get
-      } yield (current, after)
+  test("Gauge No Labels: Set correctly") {
+    val set = 52D
+    val test = for {
+      cr <- CollectorRegistry.build[IO]
+      gauge <- Gauge.noLabels[IO](cr, Name("boo"), "Boo Gauge")
+      _ <- gauge.set(set)
+      out <- gauge.get
+    } yield out
 
-      test.unsafeRunSync() must_=== ((10, 0))
-    }
+    test.assertEquals(set)
+  }
 
-    "decIn an operation succesfully" in {
-      val test = for {
-        cr <- CollectorRegistry.build[IO]
-        gauge <- Gauge.noLabels[IO](cr, Name("boo"), "Boo Gauge")
-        _ <- gauge.inc
-        defer <- Deferred[IO, Unit]
-        fib <- gauge.decIn(defer.get).start
-        _ <- IO.sleep(1.second)
-        current <- gauge.get
-        _ <- defer.complete(())
-        _ <- fib.join
-        after <- gauge.get
-      } yield (current, after)
+  test("Gauge Labelled: Register cleanly in the collector") {
+    val test = for {
+      cr <- CollectorRegistry.build[IO]
+      gauge <- Gauge.labelled(cr, Name("boo"), "Boo Gauge", Sized(Label("boo")), { s: String => Sized(s) })
+    } yield gauge
 
-      test.unsafeRunSync() must_=== ((0, 1))
-    }
+    test.attempt.map(_.isRight).assert
+  }
 
-    "decByIn an operation succesfully" in {
-      val test = for {
-        cr <- CollectorRegistry.build[IO]
-        gauge <- Gauge.noLabels[IO](cr, Name("boo"), "Boo Gauge")
-        _ <- gauge.incBy(10)
-        defer <- Deferred[IO, Unit]
-        fib <- gauge.decByIn(defer.get, 10).start
-        _ <- IO.sleep(1.second)
-        current <- gauge.get
-        _ <- defer.complete(())
-        _ <- fib.join
-        after <- gauge.get
-      } yield (current, after)
+  test("Gauge Labelled: Increase correctly") {
+    val test = for {
+      cr <- CollectorRegistry.build[IO]
+      gauge <- Gauge.labelled(cr, Name("boo"), "Boo Gauge", Sized(Label("boo")), { s: String => Sized(s) })
+      _ <- gauge.label("boo").inc
+      out <- gauge.label("boo").get
+    } yield out
 
-      test.unsafeRunSync() must_=== ((0, 10))
-    }
+    test.assertEquals(1D)
+  }
+
+  test("Gauge Labelled: Decrease correctly") {
+    val test = for {
+      cr <- CollectorRegistry.build[IO]
+      gauge <- Gauge.labelled(cr, Name("boo"), "Boo Gauge", Sized(Label("boo")), { s: String => Sized(s) })
+      _ <- gauge.label("boo").inc
+      _ <- gauge.label("boo").dec
+      out <- gauge.label("boo").get
+    } yield out
+
+    test.assertEquals(0D)
+  }
+
+  test("Gauge Labelled: Set correctly") {
+    val set = 52D
+    val test = for {
+      cr <- CollectorRegistry.build[IO]
+      gauge <- Gauge.labelled(cr, Name("boo"), "Boo Gauge", Sized(Label("boo")), { s: String => Sized(s) })
+      _ <- gauge.label("boo").set(set)
+      out <- gauge.label("boo").get
+    } yield out
+
+    test.assertEquals(set)
+  }
+
+  test("Gauge Convenience: incIn an operation succesfully") {
+    val test = for {
+      cr <- CollectorRegistry.build[IO]
+      gauge <- Gauge.noLabels[IO](cr, Name("boo"), "Boo Gauge")
+      defer <- Deferred[IO, Unit]
+      fib <- gauge.incIn(defer.get).start
+      _ <- IO.sleep(1.second)
+      current <- gauge.get
+      _ <- defer.complete(())
+      _ <- fib.join
+      after <- gauge.get
+    } yield (current, after)
+
+    test.assertEquals((1D, 0D))
+  }
+
+  test("Gauge Convenience: incByIn an operation succesfully") {
+    val test = for {
+      cr <- CollectorRegistry.build[IO]
+      gauge <- Gauge.noLabels[IO](cr, Name("boo"), "Boo Gauge")
+      defer <- Deferred[IO, Unit]
+      fib <- gauge.incByIn(defer.get, 10).start
+      _ <- IO.sleep(1.second)
+      current <- gauge.get
+      _ <- defer.complete(())
+      _ <- fib.join
+      after <- gauge.get
+    } yield (current, after)
+
+    test.assertEquals((10D, 0D))
+  }
+
+  test("Gauge Convenience: decIn an operation succesfully") {
+    val test = for {
+      cr <- CollectorRegistry.build[IO]
+      gauge <- Gauge.noLabels[IO](cr, Name("boo"), "Boo Gauge")
+      _ <- gauge.inc
+      defer <- Deferred[IO, Unit]
+      fib <- gauge.decIn(defer.get).start
+      _ <- IO.sleep(1.second)
+      current <- gauge.get
+      _ <- defer.complete(())
+      _ <- fib.join
+      after <- gauge.get
+    } yield (current, after)
+
+    test.assertEquals((0D, 1D))
+  }
+
+  test("Gauge Convenience: decByIn an operation succesfully") {
+    val test = for {
+      cr <- CollectorRegistry.build[IO]
+      gauge <- Gauge.noLabels[IO](cr, Name("boo"), "Boo Gauge")
+      _ <- gauge.incBy(10)
+      defer <- Deferred[IO, Unit]
+      fib <- gauge.decByIn(defer.get, 10).start
+      _ <- IO.sleep(1.second)
+      current <- gauge.get
+      _ <- defer.complete(())
+      _ <- fib.join
+      after <- gauge.get
+    } yield (current, after)
+
+    test.assertEquals((0D, 10D))
   }
 
 

@@ -1,23 +1,20 @@
 package io.chrisdavenport.epimetheus
 
 import cats.effect._
-import cats.effect.unsafe.implicits.global
-import org.specs2.mutable.Specification
 import shapeless._
 
-class CounterSpec extends Specification {
+class CounterSpec extends munit.CatsEffectSuite {
 
-  "Counter No Labels" should {
-    "Register cleanly in the collector" in {
+    test("Counter No Labels: Register cleanly in the collector") {
       val test = for {
         cr <- CollectorRegistry.build[IO]
         counter <- Counter.noLabels[IO](cr, Name("boo"), "Boo Counter")
       } yield counter
 
-      test.attempt.unsafeRunSync() must beRight
+      test.attempt.map(_.isRight).assert
     }
 
-    "Increase correctly" in {
+    test("Counter No Labels: Increase correctly") {
       val test = for {
         cr <- CollectorRegistry.build[IO]
         counter <- Counter.noLabels[IO](cr, Name("boo"), "Boo Counter")
@@ -25,21 +22,19 @@ class CounterSpec extends Specification {
         out <- counter.get
       } yield out
 
-      test.unsafeRunSync() must_=== 1D
+      test.assertEquals(1D)
     }
-  }
 
-  "Counter Labelled" should {
-    "Register cleanly in the collector" in {
+    test("Counter Labelled: Register cleanly in the collector") {
       val test = for {
         cr <- CollectorRegistry.build[IO]
         counter <- Counter.labelled(cr, Name("boo"), "Boo Counter", Sized(Label("foo")), {s: String => Sized(s)})
       } yield counter
 
-      test.attempt.unsafeRunSync() must beRight
+      test.attempt.map(_.isRight).assert
     }
 
-    "Increase correctly" in {
+    test("Counter Labelled: Increase correctly") {
       val test = for {
         cr <- CollectorRegistry.build[IO]
         counter <- Counter.labelled(cr, Name("boo"), "Boo Counter", Sized(Label("foo")), {s: String => Sized(s)})
@@ -47,9 +42,7 @@ class CounterSpec extends Specification {
         out <- counter.label("foo").get
       } yield out
 
-      test.unsafeRunSync() must_=== 1D
+      test.assertEquals(1D)
     }
-  }
-
 
 }
