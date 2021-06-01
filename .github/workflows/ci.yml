@@ -9,9 +9,9 @@ name: Continuous Integration
 
 on:
   pull_request:
-    branches: ['*']
+    branches: ['**']
   push:
-    branches: ['*']
+    branches: ['**']
     tags: [v*]
 
 env:
@@ -33,7 +33,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Java and Scala
-        uses: olafurpg/setup-scala@v10
+        uses: olafurpg/setup-scala@v12
         with:
           java-version: ${{ matrix.java }}
 
@@ -62,12 +62,12 @@ jobs:
           gem install jekyll -v 3.2.1
 
       - name: Check that workflows are up to date
-        run: sbt ++${{ matrix.scala }} githubWorkflowCheck
+        run: sbt --client '++${{ matrix.scala }}; githubWorkflowCheck'
 
-      - run: sbt ++${{ matrix.scala }} test mimaReportBinaryIssues
+      - run: sbt --client '++${{ matrix.scala }}; test; mimaReportBinaryIssues'
 
       - if: matrix.scala == '2.13.5'
-        run: sbt ++${{ matrix.scala }} site/makeMicrosite
+        run: sbt --client '++${{ matrix.scala }}; site/makeMicrosite'
 
   publish:
     name: Publish Artifacts
@@ -86,7 +86,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Java and Scala
-        uses: olafurpg/setup-scala@v10
+        uses: olafurpg/setup-scala@v12
         with:
           java-version: ${{ matrix.java }}
 
@@ -120,7 +120,7 @@ jobs:
           PGP_SECRET: ${{ secrets.PGP_SECRET }}
           SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
           SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
-        run: sbt ++${{ matrix.scala }} ci-release
+        run: sbt --client '++${{ matrix.scala }}; ci-release'
 
       - name: Publish microsite
-        run: sbt ++${{ matrix.scala }} ++2.13.5 site/publishMicrosite
+        run: sbt --client '++${{ matrix.scala }}; ++2.13.5; site/publishMicrosite'
