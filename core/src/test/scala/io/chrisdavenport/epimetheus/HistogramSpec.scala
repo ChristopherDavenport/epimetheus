@@ -1,30 +1,23 @@
 package io.chrisdavenport.epimetheus
 
 import cats.effect._
-import cats.effect.unsafe.implicits.global
-import org.specs2.mutable.Specification
-import shapeless._
 
-class HistogramSpec extends Specification {
-  "Histogram No Labels" should {
-    "Register cleanly in the collector" in {
-      val test = for {
-        cr <- CollectorRegistry.build[IO]
-        h <- Histogram.noLabelsBuckets[IO](cr, Name("boo"), "Boo ", 0.1, 0.2, 0.3, 0.4)
-      } yield h
+class HistogramSpec extends munit.CatsEffectSuite {
+  test("Histogram No Labels: Register cleanly in the collector") {
+    val test = for {
+      cr <- CollectorRegistry.build[IO]
+      h <- Histogram.noLabelsBuckets[IO](cr, Name("boo"), "Boo ", 0.1, 0.2, 0.3, 0.4)
+    } yield h
 
-      test.attempt.unsafeRunSync() must beRight
-    }
+    test.attempt.map(_.isRight).assert
   }
 
-  "Histogram Labelled" should {
-    "Register cleanly in the collector" in {
-      val test = for {
-        cr <- CollectorRegistry.build[IO]
-        h <- Histogram.labelledBuckets(cr, Name("boo"), "Boo ", Sized(Label("boo")), {s: String => Sized(s)}, 0.1, 0.2, 0.3, 0.4)
-      } yield h
+  test("Histogram Labelled: Register cleanly in the collector") {
+    val test = for {
+      cr <- CollectorRegistry.build[IO]
+      h <- Histogram.labelledBuckets(cr, Name("boo"), "Boo ", Sized(Label("boo")), { (s: String) => Sized(s) }, 0.1, 0.2, 0.3, 0.4)
+    } yield h
 
-      test.attempt.unsafeRunSync() must beRight
-    }
+    test.attempt.map(_.isRight).assert
   }
 }

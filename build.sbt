@@ -1,11 +1,13 @@
 import sbtcrossproject.CrossPlugin.autoImport.{crossProject, CrossType}
 
-val Scala213 = "2.13.5"
+val Scala213 = "2.13.6"
 
-ThisBuild / crossScalaVersions := Seq("2.12.13", Scala213)
+ThisBuild / crossScalaVersions := Seq("2.12.13", "3.0.0", Scala213)
 ThisBuild / scalaVersion := crossScalaVersions.value.last
 
 ThisBuild / githubWorkflowArtifactUpload := false
+ThisBuild / githubWorkflowBuildMatrixFailFast := Some(false)
+ThisBuild / githubWorkflowJavaVersions := List("adopt@1.11")
 
 val Scala213Cond = s"matrix.scala == '$Scala213'"
 
@@ -82,10 +84,10 @@ lazy val contributors = Seq(
 
 val prometheusV = "0.10.0"
 val catsV = "2.6.1"
-val catsEffectV = "3.1.0"
+val catsEffectV = "3.1.1"
 val shapelessV = "2.3.7"
 
-val specs2V = "4.10.6"
+val munitCatsEffectV = "1.0.3"
 
 val kindProjectorV = "0.13.0"
 val betterMonadicForV = "0.3.1"
@@ -94,39 +96,41 @@ val betterMonadicForV = "0.3.1"
 lazy val commonSettings = Seq(
   organization := "io.chrisdavenport",
 
-  scalacOptions in (Compile, doc) ++= Seq(
+  Compile / doc / scalacOptions ++= Seq(
       "-groups",
-      "-sourcepath", (baseDirectory in LocalRootProject).value.getAbsolutePath,
+      "-sourcepath", (LocalRootProject / baseDirectory).value.getAbsolutePath,
       "-doc-source-url", "https://github.com/ChristopherDavenport/epimetheus/blob/v" + version.value + "€{FILE_PATH}.scala"
   ),
-  scalacOptions -= "-Xfatal-warnings",
-
-  scalacOptions in (Compile, doc) ++=
+  scalacOptions --= List("-source", "future", "-Xfatal-warnings"),
+  Compile / doc / scalacOptions ++=
     Seq("-doc-root-content", (baseDirectory.value.getParentFile / "rootdoc.txt").getAbsolutePath),
-  scalacOptions in (Compile, doc) ++= Opts.doc.title("epimetheus"),
+  Compile / doc / scalacOptions ++= Opts.doc.title("epimetheus"),
 
-  addCompilerPlugin("org.typelevel" %  "kind-projector"     % kindProjectorV cross CrossVersion.full),
-  addCompilerPlugin("com.olegpy"    %% "better-monadic-for" % betterMonadicForV),
   libraryDependencies ++= Seq(
-    "org.scala-lang"              % "scala-reflect"               % scalaVersion.value,
     "io.prometheus"               % "simpleclient"                % prometheusV,
     "io.prometheus"               % "simpleclient_common"         % prometheusV,
     "io.prometheus"               % "simpleclient_hotspot"        % prometheusV,
 
     "org.typelevel"               %% "cats-core"                  % catsV,
-
     "org.typelevel"               %% "cats-effect"                % catsEffectV,
-    "org.typelevel"               %% "cats-effect-laws"           % catsEffectV   % Test,
-    "com.chuusai"                 %% "shapeless"                  % shapelessV,
 
-    "org.specs2"                  %% "specs2-core"                % specs2V       % Test,
-    "org.specs2"                  %% "specs2-scalacheck"          % specs2V       % Test
-  )
+    "org.typelevel"               %%% "munit-cats-effect-3"       % munitCatsEffectV  % Test
+  ),
+  libraryDependencies ++= PartialFunction.condOpt(CrossVersion.partialVersion(scalaVersion.value)) { case Some((2, _)) =>
+      Seq(
+        compilerPlugin("org.typelevel" %  "kind-projector"     % kindProjectorV cross CrossVersion.full),
+        compilerPlugin("com.olegpy"    %% "better-monadic-for" % betterMonadicForV),
+        "org.scala-lang"              % "scala-reflect"               % scalaVersion.value,
+        "com.chuusai"                 %% "shapeless"                  % shapelessV
+      )
+    }
+    .toList
+    .flatten
 )
 
 lazy val releaseSettings = {
   Seq(
-    publishArtifact in Test := false,
+    Test / publishArtifact := false,
     scmInfo := Some(
       ScmInfo(
         url("https://github.com/ChristopherDavenport/epimetheus"),
@@ -246,7 +250,7 @@ lazy val micrositeSettings = {
         "catsEffectVersion" -> catsEffectV,
         "shapelessVersion"  -> shapelessV,
         "scalaVersion"      -> scalaVersion.value,
-        "scalaVersions"     -> crossScalaVersions.value.map(CrossVersion.partialVersion).flatten.map(_._2).mkString("2.", "/", "") // 2.11/12
+        "scalaVersions"     -> crossScalaVersions.value.flatMap(CrossVersion.partialVersion).map(_._2).mkString("2.", "/", "") // 2.11/12
       )
     ),
     micrositeExtraMdFiles := Map(
@@ -258,7 +262,7 @@ lazy val micrositeSettings = {
 }
 
 lazy val skipOnPublishSettings = Seq(
-  skip in publish := true,
+  publish / skip := true,
   publish := (()),
   publishLocal := (()),
   publishArtifact := false,

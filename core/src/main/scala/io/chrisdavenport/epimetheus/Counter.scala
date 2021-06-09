@@ -4,7 +4,6 @@ import cats._
 import cats.implicits._
 import cats.effect._
 import io.prometheus.client.{Counter => JCounter}
-import shapeless._
 
 /**
   * Counter metric, to track counts, running totals, or events.
@@ -99,25 +98,25 @@ object Counter {
     labels: Sized[IndexedSeq[Label], N],
     f: A => Sized[IndexedSeq[String], N]
   ): F[UnlabelledCounter[F, A]] = for {
-      c <- Sync[F].delay(JCounter.build().name(name.getName).help(help).labelNames(labels.map(_.getLabel):_*))
+    c <- Sync[F].delay(JCounter.build().name(name.getName).help(help).labelNames(labels.unsized.map(_.getLabel):_*))
     out <- Sync[F].delay(c.register(CollectorRegistry.Unsafe.asJava(cr)))
   } yield new UnlabelledCounterImpl[F, A](out, f.andThen(_.unsized))
 
-  private final class NoLabelsCounter[F[_]: Sync] private[Counter] (private[Counter] val underlying: JCounter) extends Counter[F] {
+  private final case class NoLabelsCounter[F[_]: Sync] private[Counter] (private[Counter] val underlying: JCounter) extends Counter[F] {
     override def get: F[Double] = Sync[F].delay(underlying.get)
 
     override def inc: F[Unit] = Sync[F].delay(underlying.inc)
     override def incBy(d: Double): F[Unit] = Sync[F].delay(underlying.inc(d))
   }
 
-  private final class LabelledCounter[F[_]: Sync] private[Counter] (private[Counter] val underlying: JCounter.Child) extends Counter[F] {
+  private final case class LabelledCounter[F[_]: Sync] private[Counter] (private[Counter] val underlying: JCounter.Child) extends Counter[F] {
     override def get: F[Double] = Sync[F].delay(underlying.get)
 
     def inc: F[Unit] = Sync[F].delay(underlying.inc)
     def incBy(d: Double): F[Unit] = Sync[F].delay(underlying.inc(d))
   }
 
-  private final class MapKCounter[F[_], G[_]](private[Counter] val base: Counter[F], fk: F ~> G) extends Counter[G]{
+  private final case class MapKCounter[F[_], G[_]](private[Counter] val base: Counter[F], fk: F ~> G) extends Counter[G]{
     def get: G[Double] = fk(base.get)
     def inc: G[Unit] = fk(base.inc)
     def incBy(d: Double): G[Unit] = fk(base.incBy(d))
@@ -134,7 +133,7 @@ object Counter {
     def mapK[G[_]](fk: F ~> G): UnlabelledCounter[G, A] = new MapKUnlabelledCounter[F, G, A](this, fk)
   }
 
-  private final class UnlabelledCounterImpl[F[_]: Sync, A] private[Counter](
+  private final case class UnlabelledCounterImpl[F[_]: Sync, A] private[Counter](
     private[Counter] val underlying: JCounter,
     private val f: A => IndexedSeq[String]
   ) extends UnlabelledCounter[F, A]{
@@ -142,19 +141,19 @@ object Counter {
       new LabelledCounter(underlying.labels(f(a):_*))
   }
 
-  private final class MapKUnlabelledCounter[F[_], G[_], A](private[Counter] val base: UnlabelledCounter[F, A], fk: F ~> G) extends UnlabelledCounter[G, A]{
+  private final case class MapKUnlabelledCounter[F[_], G[_], A](private[Counter] val base: UnlabelledCounter[F, A], fk: F ~> G) extends UnlabelledCounter[G, A]{
     def label(a: A): Counter[G] = base.label(a).mapK(fk)
   }
 
   object Unsafe {
     def asJavaUnlabelled[F[_], A](c: UnlabelledCounter[F, A]): JCounter = c match {
-      case m: MapKUnlabelledCounter[_, _, _] => asJavaUnlabelled(m.base)
+      case m: MapKUnlabelledCounter[f, _, a] => asJavaUnlabelled(m.base)
       case m: UnlabelledCounterImpl[_, _] => m.underlying
     }
     def asJava[F[_]: ApplicativeThrow](c: Counter[F]): F[JCounter] = c match {
       case _: LabelledCounter[F] => ApplicativeThrow[F].raiseError(new IllegalArgumentException("Cannot Get Underlying Parent with Labels Applied"))
-      case n: NoLabelsCounter[F] => n.underlying.pure[F]
-      case b: MapKCounter[_, _] =>  asJava(b.base)
+      case NoLabelsCounter(underlying) => underlying.pure[F]
+      case MapKCounter(base, _) => asJava(base.asInstanceOf[Counter[F]])
     }
   }
 }

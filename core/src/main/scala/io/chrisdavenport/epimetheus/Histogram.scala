@@ -6,7 +6,6 @@ import cats.implicits._
 import io.prometheus.client.{Histogram => JHistogram}
 
 import scala.concurrent.duration._
-import shapeless._
 
 /**
  * Histogram metric, to track distributions of events.
@@ -50,9 +49,9 @@ object Histogram {
    *  are optimized for `SECONDS`.
    */
   def timed[F[_] : Clock, A](h: Histogram[F], fa: F[A], unit: TimeUnit)(implicit C: MonadCancel[F, _]): F[A] =
-    C.bracket(Clock[F].monotonic)
-    {_: FiniteDuration => fa}
-    {start: FiniteDuration => Clock[F].monotonic.flatMap(now => h.observe((now - start).toUnit(unit)))}
+    C.bracket(Clock[F].monotonic)((_: FiniteDuration) => fa) { (start: FiniteDuration) =>
+      Clock[F].monotonic.flatMap(now => h.observe((now - start).toUnit(unit)))
+    }
 
   /**
    * Persist a timed value into this [[Histogram]] in unit Seconds. This is exposed.
@@ -201,7 +200,7 @@ object Histogram {
       JHistogram.build()
       .name(name.getName)
       .help(help)
-      .labelNames(labels.map(_.getLabel):_*)
+      .labelNames(labels.unsized.map(_.getLabel):_*)
       .buckets(buckets:_*)
     )
     out <- Sync[F].delay(c.register(CollectorRegistry.Unsafe.asJava(cr)))
@@ -221,7 +220,7 @@ object Histogram {
       JHistogram.build()
       .name(name.getName)
       .help(help)
-      .labelNames(labels.map(_.getLabel):_*)
+      .labelNames(labels.unsized.map(_.getLabel):_*)
       .linearBuckets(start, factor, count)
     )
     out <- Sync[F].delay(c.register(CollectorRegistry.Unsafe.asJava(cr)))
@@ -241,26 +240,26 @@ object Histogram {
       JHistogram.build()
       .name(name.getName)
       .help(help)
-      .labelNames(labels.map(_.getLabel):_*)
+      .labelNames(labels.unsized.map(_.getLabel):_*)
       .exponentialBuckets(start, factor, count)
     )
     out <- Sync[F].delay(c.register(CollectorRegistry.Unsafe.asJava(cr)))
   } yield new UnlabelledHistogramImpl[F, A](out, f.andThen(_.unsized))
 
-  private final class NoLabelsHistogram[F[_]: Sync] private[Histogram] (
+  private final case class NoLabelsHistogram[F[_]: Sync] private[Histogram] (
     private[Histogram] val underlying: JHistogram
   ) extends Histogram[F] {
     def observe(d: Double): F[Unit] = Sync[F].delay(underlying.observe(d))
 
   }
 
-  private final class LabelledHistogram[F[_]: Sync] private[Histogram] (
+  private final case class LabelledHistogram[F[_]: Sync] private[Histogram] (
     private val underlying: JHistogram.Child
   ) extends Histogram[F] {
     def observe(d: Double): F[Unit] = Sync[F].delay(underlying.observe(d))
   }
 
-  private final class MapKHistogram[F[_], G[_]](private[Histogram] val base: Histogram[F], fk: F ~> G) extends Histogram[G]{
+  private final case class MapKHistogram[F[_], G[_]](private[Histogram] val base: Histogram[F], fk: F ~> G) extends Histogram[G]{
     def observe(d: Double): G[Unit] = fk(base.observe(d))
   }
 
@@ -275,7 +274,7 @@ object Histogram {
     def mapK[G[_]](fk: F ~> G): UnlabelledHistogram[G, A] = new MapKUnlabelledHistogram[F, G, A](this, fk)
   }
 
-  final private class UnlabelledHistogramImpl[F[_]: Sync, A] private[Histogram] (
+  final private[epimetheus] case class UnlabelledHistogramImpl[F[_]: Sync, A] private[epimetheus] (
     private[Histogram] val underlying: JHistogram,
     private val f: A => IndexedSeq[String]
   ) extends UnlabelledHistogram[F, A]{
@@ -283,19 +282,19 @@ object Histogram {
       new LabelledHistogram[F](underlying.labels(f(a):_*))
   }
 
-  final private class MapKUnlabelledHistogram[F[_], G[_], A](private[Histogram] val base: UnlabelledHistogram[F, A], fk: F ~> G) extends UnlabelledHistogram[G, A]{
+  final private case class MapKUnlabelledHistogram[F[_], G[_], A](private[Histogram] val base: UnlabelledHistogram[F, A], fk: F ~> G) extends UnlabelledHistogram[G, A]{
     def label(a: A): Histogram[G] = base.label(a).mapK(fk)
   }
 
   object Unsafe {
     def asJavaUnlabelled[F[_], A](h: UnlabelledHistogram[F, A]): JHistogram = h match {
-      case h: UnlabelledHistogramImpl[_, _] => h.underlying
-      case h: MapKUnlabelledHistogram[_, _, _] => asJavaUnlabelled(h.base)
+      case h: UnlabelledHistogramImpl[F, A] => h.underlying
+      case h: MapKUnlabelledHistogram[f, _, a] => asJavaUnlabelled(h.base)
     }
     def asJava[F[_]: ApplicativeThrow](c: Histogram[F]): F[JHistogram] = c match {
       case _: LabelledHistogram[F] => ApplicativeThrow[F].raiseError(new IllegalArgumentException("Cannot Get Underlying Parent with Labels Applied"))
-      case n: NoLabelsHistogram[F] => n.underlying.pure[F]
-      case h: MapKHistogram[_, _] => asJava(h.base)
+      case NoLabelsHistogram(underlying) => underlying.pure[F]
+      case MapKHistogram(base, _) => asJava(base.asInstanceOf[Histogram[F]])
     }
   }
 
