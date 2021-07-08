@@ -113,14 +113,14 @@ object Counter {
   private final class LabelledCounter[F[_]: Sync] private[Counter] (private[Counter] val underlying: JCounter.Child) extends Counter[F] {
     override def get: F[Double] = Sync[F].delay(underlying.get)
 
-    def inc: F[Unit] = Sync[F].delay(underlying.inc)
-    def incBy(d: Double): F[Unit] = Sync[F].delay(underlying.inc(d))
+    override def inc: F[Unit] = Sync[F].delay(underlying.inc)
+    override def incBy(d: Double): F[Unit] = Sync[F].delay(underlying.inc(d))
   }
 
   private final class MapKCounter[F[_], G[_]](private[Counter] val base: Counter[F], fk: F ~> G) extends Counter[G]{
-    def get: G[Double] = fk(base.get)
-    def inc: G[Unit] = fk(base.inc)
-    def incBy(d: Double): G[Unit] = fk(base.incBy(d))
+    override def get: G[Double] = fk(base.get)
+    override def inc: G[Unit] = fk(base.inc)
+    override def incBy(d: Double): G[Unit] = fk(base.incBy(d))
   }
 
   /**
@@ -132,18 +132,21 @@ object Counter {
   sealed trait UnlabelledCounter[F[_], A]{
     def label(a: A): Counter[F]
     def mapK[G[_]](fk: F ~> G): UnlabelledCounter[G, A] = new MapKUnlabelledCounter[F, G, A](this, fk)
+    def collector: Collector
   }
 
   private final class UnlabelledCounterImpl[F[_]: Sync, A] private[Counter](
     private[Counter] val underlying: JCounter,
     private val f: A => IndexedSeq[String]
   ) extends UnlabelledCounter[F, A]{
-    def label(a: A): Counter[F] =
+    override def label(a: A): Counter[F] =
       new LabelledCounter(underlying.labels(f(a):_*))
+    override def collector: Collector = Collector.Unsafe.fromJava(underlying)
   }
 
   private final class MapKUnlabelledCounter[F[_], G[_], A](private[Counter] val base: UnlabelledCounter[F, A], fk: F ~> G) extends UnlabelledCounter[G, A]{
-    def label(a: A): Counter[G] = base.label(a).mapK(fk)
+    override def label(a: A): Counter[G] = base.label(a).mapK(fk)
+    override def collector: Collector = base.collector
   }
 
   object Unsafe {
