@@ -136,47 +136,48 @@ object Gauge {
   private final class NoLabelsGauge[F[_]: Sync] private[Gauge] (
     private[Gauge] val underlying: JGauge
   ) extends Gauge[F] {
-    def get: F[Double] = Sync[F].delay(underlying.get())
+    override def get: F[Double] = Sync[F].delay(underlying.get())
 
-    def dec: F[Unit] = Sync[F].delay(underlying.dec())
-    def decBy(d: Double): F[Unit] = Sync[F].delay(underlying.dec(d))
+    override def dec: F[Unit] = Sync[F].delay(underlying.dec())
+    override def decBy(d: Double): F[Unit] = Sync[F].delay(underlying.dec(d))
 
-    def inc: F[Unit] = Sync[F].delay(underlying.inc())
-    def incBy(d: Double): F[Unit] = Sync[F].delay(underlying.inc(d))
+    override def inc: F[Unit] = Sync[F].delay(underlying.inc())
+    override def incBy(d: Double): F[Unit] = Sync[F].delay(underlying.inc(d))
 
-    def set(d: Double): F[Unit] = Sync[F].delay(underlying.set(d))
+    override def set(d: Double): F[Unit] = Sync[F].delay(underlying.set(d))
   }
 
   private final class LabelledGauge[F[_]: Sync] private[Gauge] (
     private val underlying: JGauge.Child
   ) extends Gauge[F] {
-    def get: F[Double] = Sync[F].delay(underlying.get())
+    override def get: F[Double] = Sync[F].delay(underlying.get())
 
-    def dec: F[Unit] = Sync[F].delay(underlying.dec())
-    def decBy(d: Double): F[Unit] = Sync[F].delay(underlying.dec(d))
+    override def dec: F[Unit] = Sync[F].delay(underlying.dec())
+    override def decBy(d: Double): F[Unit] = Sync[F].delay(underlying.dec(d))
 
-    def inc: F[Unit] = Sync[F].delay(underlying.inc())
-    def incBy(d: Double): F[Unit] = Sync[F].delay(underlying.inc(d))
+    override def inc: F[Unit] = Sync[F].delay(underlying.inc())
+    override def incBy(d: Double): F[Unit] = Sync[F].delay(underlying.inc(d))
 
-    def set(d: Double): F[Unit] = Sync[F].delay(underlying.set(d))
+    override def set(d: Double): F[Unit] = Sync[F].delay(underlying.set(d))
   }
 
   private final class MapKGauge[F[_], G[_]](private[Gauge] val base: Gauge[F], fk: F ~> G) extends Gauge[G]{
-    def get: G[Double] = fk(base.get)
+    override def get: G[Double] = fk(base.get)
 
-    def dec: G[Unit] = fk(base.dec)
-    def decBy(d: Double): G[Unit] = fk(base.decBy(d))
+    override def dec: G[Unit] = fk(base.dec)
+    override def decBy(d: Double): G[Unit] = fk(base.decBy(d))
 
-    def inc: G[Unit] = fk(base.inc)
-    def incBy(d: Double): G[Unit] = fk(base.incBy(d))
+    override def inc: G[Unit] = fk(base.inc)
+    override def incBy(d: Double): G[Unit] = fk(base.incBy(d))
 
-    def set(d: Double): G[Unit] = fk(base.set(d))
+    override def set(d: Double): G[Unit] = fk(base.set(d))
   }
 
 
   sealed trait UnlabelledGauge[F[_], A]{
     def label(a: A): Gauge[F]
     def mapK[G[_]](fk: F ~> G): UnlabelledGauge[G, A] = new MapKUnlabelledGauge[F, G, A](this, fk)
+    def collector: Collector
   }
 
   /**
@@ -187,14 +188,18 @@ object Gauge {
    */
   final private class UnlabelledGaugeImpl[F[_]: Sync, A] private[epimetheus](
     private[Gauge] val underlying: JGauge,
-    private val f: A => IndexedSeq[String]
+    private val f: A => IndexedSeq[String],
   ) extends UnlabelledGauge[F, A] {
-    def label(a: A): Gauge[F] =
+    override def label(a: A): Gauge[F] =
       new LabelledGauge[F](underlying.labels(f(a):_*))
+
+    override def collector: Collector = Collector.Unsafe.fromJava(underlying)
   }
 
   final private class MapKUnlabelledGauge[F[_], G[_], A](private[Gauge] val base: UnlabelledGauge[F, A], fk: F ~> G) extends UnlabelledGauge[G, A]{
-    def label(a: A): Gauge[G] = base.label(a).mapK(fk)
+    override def label(a: A): Gauge[G] = base.label(a).mapK(fk)
+
+    override def collector: Collector = base.collector
   }
 
 

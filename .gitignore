@@ -13,3 +13,9 @@ project/metals.sbt
 .vscode
 
 .bsp/
+
+.DS_Store
+
+GPATH
+GRTAGS
+GTAGS
